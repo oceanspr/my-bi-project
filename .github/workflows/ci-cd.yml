@@ -1,0 +1,80 @@
+name: CI/CD - dbt Pipeline
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths: ["models/**", "dbt_project.yml", "profiles.yml"]
+  push:
+    branches: [main, develop]
+    paths: ["models/**", "dbt_project.yml", "profiles.yml"]
+
+jobs:
+  build-test-db-warehouse:
+    name: Build and Test dbt Models
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: my_bi_db
+          POSTGRES_USER: dbt_user
+          POSTGRES_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
+        options: "--health-cmd=pg_isready --health-interval=10s --health-timeout=5s --health-retries=5"
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up dbt-core
+        uses: dbt-labs/dbt-github-action-setup@v1
+        with:
+          dbt-version: 1.8.x
+      
+      
+      - name: Apply schema changes from SQL files
+        working-directory: models
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: my_bi_db
+          DB_USER: dbt_user
+          DB_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
+          SSLMODE: require
+        run: |
+          psql -h localhost -p 5432 -U dbt_user -d my_bi_db --sslmode=require --file init_schema.sql
+      
+      - name: Run dbt build (CI target)
+        working-directory: models
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: my_bi_db
+          DB_USER: dbt_user
+          DB_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
+        run: |
+          dbt --profiles-dir models run --target ci --select full
+      
+      - name: Run dbt build (dev target)
+        working-directory: models
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: my_bi_db
+          DB_USER: dbt_user
+          DB_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
+        run: |
+          dbt --profiles-dir models run --target dev --select full
+      
+      - name: Run dbt test (schema validation)
+        working-directory: models
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: my_bi_db
+          DB_USER: dbt_user
+          DB_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
+        run: |
+          dbt --profiles-dir models test --target ci
