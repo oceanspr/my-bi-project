@@ -1,80 +1,55 @@
 name: CI/CD - dbt Pipeline
 
 on:
-  pull_request:
-    branches: [main, develop]
-    paths: ["models/**", "dbt_project.yml", "profiles.yml"]
   push:
-    branches: [main, develop]
-    paths: ["models/**", "dbt_project.yml", "profiles.yml"]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build-test-db-warehouse:
+  build-and-test:
     name: Build and Test dbt Models
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:15
         env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_password
           POSTGRES_DB: my_bi_db
-          POSTGRES_USER: dbt_user
-          POSTGRES_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
-        options: "--health-cmd=pg_isready --health-interval=10s --health-timeout=5s --health-retries=5"
         ports:
           - 5432:5432
-    
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_USER: postgres
+      DB_PASSWORD: ci_password
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: my_bi_db
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Set up dbt-core
-        uses: dbt-labs/dbt-github-action-setup@v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          dbt-version: 1.8.x
-      
-      
-      - name: Apply schema changes from SQL files
-        working-directory: models
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: my_bi_db
-          DB_USER: dbt_user
-          DB_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
-          SSLMODE: require
+          python-version: '3.11'
+
+      - name: Install dbt-postgres
         run: |
-          psql -h localhost -p 5432 -U dbt_user -d my_bi_db --sslmode=require --file init_schema.sql
-      
-      - name: Run dbt build (CI target)
-        working-directory: models
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: my_bi_db
-          DB_USER: dbt_user
-          DB_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
+          python -m pip install --upgrade pip
+          pip install dbt-postgres
+
+      - name: Run dbt seed, build, and test
         run: |
-          dbt --profiles-dir models run --target ci --select full
-      
-      - name: Run dbt build (dev target)
-        working-directory: models
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: my_bi_db
-          DB_USER: dbt_user
-          DB_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
-        run: |
-          dbt --profiles-dir models run --target dev --select full
-      
-      - name: Run dbt test (schema validation)
-        working-directory: models
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: my_bi_db
-          DB_USER: dbt_user
-          DB_PASSWORD: ${{ secrets.DB_TEST_PASSWORD }}
-        run: |
-          dbt --profiles-dir models test --target ci
+          dbt debug --profiles-dir .
+          dbt seed --profiles-dir .
+          dbt run --profiles-dir .
+          dbt test --profiles-dir .
