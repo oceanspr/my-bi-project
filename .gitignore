@@ -1,0 +1,16 @@
+# Secrets and local environment variables
+.env
+
+# dbt build artifacts and packages
+target/
+dbt_packages/
+logs/
+
+# Python virtual environments
+venv/
+.venv/
+__pycache__/
+
+# OS and editor files
+.DS_Store
+.vscode/
