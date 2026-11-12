@@ -1,25 +1,20 @@
 # dbt profiles.yml for local Postgres BI project
 # This file configures the connection to your local PostgreSQL database
 
-version: 2
-
-targets:
-  default:
-    target: dev
-    version: 1
-    
-    outputs:
-      dev:
-        type: postgres
-        host: localhost
-        port: 5432
-        dbname: my_bi_db
-        schema: public
-        user: '{{ env_var("DB_USER") }}'
-        password: '{{ env_var("DB_PASSWORD") }}'
-        seed_password: '{{ env_var("DB_SEED_PASSWORD") }}'
-        sslmode: require
-        connect_timeout: 10
+my_bi_project:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: localhost
+      port: 5432
+      dbname: my_bi_db
+      schema: public
+      user: "{{ env_var('DB_USER') }}"
+      password: "{{ env_var('DB_PASSWORD') }}"
+      sslmode: disable
+      connect_timeout: 10
+      
         
     # Production target configuration (uncomment when deploying to prod)
     # prod:
